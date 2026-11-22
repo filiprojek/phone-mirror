@@ -18,8 +18,19 @@ data class ViewerInfo(val deviceId: String, val deviceName: String, val address:
 
 class ConnectionRejectedException(val reason: RejectReason) : IOException("Rejected: $reason")
 
+/** Bidirectional message pipe; abstracted so sessions can be tested without sockets. */
+interface MessageChannel : Closeable {
+    /** Blocking, thread-safe write. Throws [IOException] if the peer is gone. */
+    fun send(message: Message)
+
+    /** Next message, or `null` once the stream has ended or this side closed it. Cancellable. */
+    suspend fun receive(): Message?
+
+    override fun close()
+}
+
 /** A framed, bidirectional message channel over one TCP socket. */
-class Connection internal constructor(private val socket: Socket) : Closeable {
+class Connection internal constructor(private val socket: Socket) : MessageChannel {
     private val reader = FrameReader(BufferedInputStream(socket.getInputStream(), 64 * 1024))
     private val writer = FrameWriter(socket.getOutputStream())
 
@@ -28,11 +39,9 @@ class Connection internal constructor(private val socket: Socket) : Closeable {
 
     val remoteAddress: String = socket.inetAddress?.hostAddress.orEmpty()
 
-    /** Blocking, thread-safe write. Throws [IOException] if the peer is gone. */
-    fun send(message: Message) = writer.writeMessage(message)
+    override fun send(message: Message) = writer.writeMessage(message)
 
-    /** Next message, or `null` once the stream has ended or this side closed it. Cancellable. */
-    suspend fun receive(): Message? {
+    override suspend fun receive(): Message? {
         if (closed) return null
         return try {
             cancellableBlocking(onCancel = ::close) { reader.readMessage() }

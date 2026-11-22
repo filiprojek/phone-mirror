@@ -39,6 +39,6 @@ sealed interface Message {
     data class SetTorch(val on: Boolean) : Message
     data class SetZoom(val ratio: Float) : Message
     data object RequestKeyFrame : Message
-    data class Ping(val timestampNanos: Long) : Message
-    data class Pong(val timestampNanos: Long) : Message
+    data class Ping(val timestampMs: Long) : Message
+    data class Pong(val timestampMs: Long) : Message
 }

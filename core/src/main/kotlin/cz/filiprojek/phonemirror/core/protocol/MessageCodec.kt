@@ -83,11 +83,11 @@ object MessageCodec {
             }
             Message.RequestKeyFrame -> Type.REQUEST_KEYFRAME
             is Message.Ping -> {
-                out.writeLong(message.timestampNanos)
+                out.writeLong(message.timestampMs)
                 Type.PING
             }
             is Message.Pong -> {
-                out.writeLong(message.timestampNanos)
+                out.writeLong(message.timestampMs)
                 Type.PONG
             }
         }
