@@ -5,7 +5,11 @@ plugins {
 
 android {
     namespace = "cz.filiprojek.phonemirror"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
 
     defaultConfig {
         applicationId = "cz.filiprojek.phonemirror"
