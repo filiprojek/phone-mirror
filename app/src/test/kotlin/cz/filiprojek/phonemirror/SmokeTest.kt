@@ -6,6 +6,6 @@ import kotlin.test.assertEquals
 class SmokeTest {
     @Test
     fun `app module links against core`() {
-        assertEquals(1, cz.filiprojek.phonemirror.core.Protocol.VERSION)
+        assertEquals(1, cz.filiprojek.phonemirror.core.protocol.Protocol.VERSION)
     }
 }
