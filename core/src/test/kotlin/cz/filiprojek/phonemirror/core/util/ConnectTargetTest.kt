@@ -47,3 +47,18 @@ class ConnectTargetTest {
         }
     }
 }
+
+class ConnectTargetNsdTest {
+    @Test
+    fun `NSD records use the advertised name and id, falling back to the service name`() {
+        val withAttrs = ConnectTarget.fromNsd(
+            serviceName = "PhoneMirror (2)",
+            host = "192.168.1.9",
+            port = 47800,
+            attributes = mapOf("name" to "Pixel 9".toByteArray(), "id" to "xyz".toByteArray()),
+        )
+        assertEquals(ConnectTarget("192.168.1.9", 47800, "Pixel 9", "xyz"), withAttrs)
+        val bare = ConnectTarget.fromNsd("PhoneMirror", "192.168.1.9", 47800, mapOf("name" to null))
+        assertEquals(ConnectTarget("192.168.1.9", 47800, "PhoneMirror", null), bare)
+    }
+}

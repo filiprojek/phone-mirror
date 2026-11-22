@@ -43,6 +43,15 @@ data class ConnectTarget(val host: String, val port: Int, val name: String? = nu
             return parseUri("$SCHEME://$trimmed")
         }
 
+        /** From a resolved NSD service; TXT records `name` and `id` are optional. */
+        fun fromNsd(serviceName: String, host: String, port: Int, attributes: Map<String, ByteArray?>): ConnectTarget =
+            ConnectTarget(
+                host = host,
+                port = port,
+                name = attributes["name"]?.toString(Charsets.UTF_8) ?: serviceName,
+                deviceId = attributes["id"]?.toString(Charsets.UTF_8),
+            )
+
         private fun encode(value: String) = URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
         private fun decode(value: String) = URLDecoder.decode(value, Charsets.UTF_8)
     }
