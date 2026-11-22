@@ -22,3 +22,15 @@ Requires JDK 17+ and an Android SDK (`ANDROID_HOME`) with platform 37.
 ./gradlew :app:assembleDebug                   # APK in app/build/outputs/apk/debug/
 ./gradlew connectedDebugAndroidTest            # on-device tests (needs adb)
 ```
+
+## Notes
+
+- **Android 17 (API 37):** both roles need the runtime `ACCESS_LOCAL_NETWORK` permission for LAN sockets and NSD; the app requests it.
+- **Approval:** every new display must be allowed on the camera phone (dialog, or a heads-up notification with Allow/Deny when the app is in the background; auto-deny after 30 s). The display that was last allowed may reconnect silently within 2 minutes of dropping, so WiFi blips do not need another tap.
+- **Lenses:** phones with a logical multi-camera (e.g. Pixels) expose one back camera whose zoom range starts below 1× — the ultrawide is reached through zoom.
+
+## Verified on hardware (Pixel 9 camera → Pixel 6 display, Android 17)
+
+NSD discovery, approval dialog, 720p30 at ~3 Mbit/s with ~5 ms latency, remote torch / zoom / lens switch,
+stats overlay, snapshot to the gallery, streaming with the camera app in the background, and automatic
+reconnect after the display's WiFi was toggled.
