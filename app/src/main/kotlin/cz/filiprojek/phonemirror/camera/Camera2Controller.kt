@@ -142,10 +142,14 @@ class Camera2Controller(
         handler.post { applyRepeating() }
     }
 
+    /** Bumped for every session request; callbacks from superseded sessions are ignored. */
+    private var sessionGeneration = 0
+
     private fun createSession() {
         val camera = device ?: return
         session?.close()
         session = null
+        val generation = ++sessionGeneration
         val outputs = targets.filter { it.isValid }
         if (outputs.isEmpty()) return
         val config = SessionConfiguration(
@@ -154,7 +158,7 @@ class Camera2Controller(
             executor,
             object : CameraCaptureSession.StateCallback() {
                 override fun onConfigured(s: CameraCaptureSession) {
-                    if (device !== camera) {
+                    if (device !== camera || generation != sessionGeneration) {
                         s.close()
                         return
                     }
@@ -165,7 +169,7 @@ class Camera2Controller(
                 override fun onConfigureFailed(s: CameraCaptureSession) {
                     Log.e(TAG, "Session configuration failed for ${outputs.size} outputs")
                     // Keep the stream alive even if the preview surface was rejected: retry encoder-only.
-                    if (outputs.size > 1 && device === camera) {
+                    if (outputs.size > 1 && device === camera && generation == sessionGeneration) {
                         targets = outputs.take(1)
                         createSession()
                     }
