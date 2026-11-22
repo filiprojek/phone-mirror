@@ -19,11 +19,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
-/** Requests [permissions] once; returns whether the *required* ones (the first) are granted. */
+/** Requests [permissions] once; returns whether all non-optional ones are granted. */
 @Composable
-fun rememberPermissions(vararg permissions: String): Boolean {
+private fun rememberPermissions(permissions: List<String>): Boolean {
     val context = LocalContext.current
-    fun granted() = ContextCompat.checkSelfPermission(context, permissions.first()) == PackageManager.PERMISSION_GRANTED
+    fun granted() = permissions.filterNot { it in optionalPermissions }
+        .all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
     var ok by remember { mutableStateOf(granted()) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         ok = granted()
@@ -35,12 +36,28 @@ fun rememberPermissions(vararg permissions: String): Boolean {
     return ok
 }
 
-val cameraPermissions: Array<String>
-    get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        arrayOf(Manifest.permission.CAMERA, Manifest.permission.POST_NOTIFICATIONS)
-    } else {
-        arrayOf(Manifest.permission.CAMERA)
-    }
+enum class Role { CAMERA, DISPLAY, SCANNER }
+
+/** Permissions the given [role] must request at runtime on Android [sdkInt]. */
+fun requiredPermissions(role: Role, sdkInt: Int): List<String> = buildList {
+    if (role == Role.CAMERA || role == Role.SCANNER) add(Manifest.permission.CAMERA)
+    // Android 17 gates LAN sockets and NSD behind a runtime permission for apps targeting it.
+    if (role != Role.SCANNER && sdkInt >= ACCESS_LOCAL_NETWORK_SDK) add(ACCESS_LOCAL_NETWORK)
+    if (role == Role.CAMERA && sdkInt >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+}
+
+/** Permissions whose denial just degrades the experience instead of blocking the role. */
+private val optionalPermissions = setOf(Manifest.permission.POST_NOTIFICATIONS)
+
+private const val ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
+private const val ACCESS_LOCAL_NETWORK_SDK = 37
+
+/** Requests everything [role] needs; returns whether all non-optional permissions are granted. */
+@Composable
+fun rememberRolePermissions(role: Role): Boolean {
+    val permissions = remember(role) { requiredPermissions(role, Build.VERSION.SDK_INT) }
+    return rememberPermissions(permissions)
+}
 
 /** Locks the activity to portrait while this composable is shown. */
 @Composable

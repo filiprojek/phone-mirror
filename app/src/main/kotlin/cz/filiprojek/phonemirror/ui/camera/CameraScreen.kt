@@ -58,8 +58,8 @@ import cz.filiprojek.phonemirror.service.PreviewTarget
 import cz.filiprojek.phonemirror.service.StreamingService
 import cz.filiprojek.phonemirror.ui.LockPortrait
 import cz.filiprojek.phonemirror.ui.QrCode
-import cz.filiprojek.phonemirror.ui.cameraPermissions
-import cz.filiprojek.phonemirror.ui.rememberPermissions
+import cz.filiprojek.phonemirror.ui.Role
+import cz.filiprojek.phonemirror.ui.rememberRolePermissions
 
 private val overlay = Color.Black.copy(alpha = 0.55f)
 
@@ -67,7 +67,7 @@ private val overlay = Color.Black.copy(alpha = 0.55f)
 fun CameraScreen(onExit: () -> Unit) {
     val context = LocalContext.current
     LockPortrait()
-    val granted = rememberPermissions(*cameraPermissions)
+    val granted = rememberRolePermissions(Role.CAMERA)
     LaunchedEffect(granted) { if (granted && !CameraHub.running.value) StreamingService.start(context) }
 
     val running by CameraHub.running.collectAsState()
@@ -98,7 +98,7 @@ fun CameraScreen(onExit: () -> Unit) {
                     Text(
                         when {
                             error != null -> "Camera error: $error"
-                            !granted -> "Camera permission is needed."
+                            !granted -> "Camera and local network permissions are needed."
                             !running -> "Starting camera…"
                             viewer != null -> "Streaming to ${viewer!!.deviceName}"
                             else -> "Waiting for a display"

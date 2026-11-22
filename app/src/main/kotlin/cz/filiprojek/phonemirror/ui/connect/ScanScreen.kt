@@ -1,6 +1,5 @@
 package cz.filiprojek.phonemirror.ui.connect
 
-import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -31,14 +30,15 @@ import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.common.HybridBinarizer
 import cz.filiprojek.phonemirror.core.util.ConnectTarget
-import cz.filiprojek.phonemirror.ui.rememberPermissions
+import cz.filiprojek.phonemirror.ui.Role
+import cz.filiprojek.phonemirror.ui.rememberRolePermissions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
 fun ScanScreen(onResult: (ConnectTarget) -> Unit, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
-    val granted = rememberPermissions(Manifest.permission.CAMERA)
+    val granted = rememberRolePermissions(Role.SCANNER)
     val lifecycleOwner = LocalLifecycleOwner.current
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (granted) {

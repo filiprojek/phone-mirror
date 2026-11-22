@@ -46,14 +46,17 @@ import androidx.compose.ui.unit.dp
 import cz.filiprojek.phonemirror.DeviceIdentity
 import cz.filiprojek.phonemirror.core.util.ConnectTarget
 import cz.filiprojek.phonemirror.discovery.NsdBrowser
+import cz.filiprojek.phonemirror.ui.Role
+import cz.filiprojek.phonemirror.ui.rememberRolePermissions
 
 @Composable
 fun ConnectScreen(onConnect: (ConnectTarget) -> Unit, onScan: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
+    val granted = rememberRolePermissions(Role.DISPLAY)
     val browser = remember { NsdBrowser(context.applicationContext) }
     val ownId = remember { DeviceIdentity(context).id }
-    DisposableEffect(browser) {
-        browser.start()
+    DisposableEffect(browser, granted) {
+        if (granted) browser.start()
         onDispose { browser.stop() }
     }
     val found by browser.cameras.collectAsState()
@@ -69,7 +72,9 @@ fun ConnectScreen(onConnect: (ConnectTarget) -> Unit, onScan: () -> Unit, onBack
                 Text("Connect to a camera", style = MaterialTheme.typography.titleLarge)
             }
             Text("Cameras on this WiFi", style = MaterialTheme.typography.titleMedium)
-            if (cameras.isEmpty()) {
+            if (!granted) {
+                Text("Allow access to devices on your local network to find and connect to cameras.")
+            } else if (cameras.isEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
@@ -106,7 +111,7 @@ fun ConnectScreen(onConnect: (ConnectTarget) -> Unit, onScan: () -> Unit, onBack
                 keyboardActions = KeyboardActions(onGo = { manualTarget?.let(onConnect) }),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Button(onClick = { manualTarget?.let(onConnect) }, enabled = manualTarget != null, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { manualTarget?.let(onConnect) }, enabled = granted && manualTarget != null, modifier = Modifier.fillMaxWidth()) {
                 Text("Connect")
             }
         }
