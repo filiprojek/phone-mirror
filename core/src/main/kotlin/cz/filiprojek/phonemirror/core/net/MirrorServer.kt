@@ -31,6 +31,7 @@ class MirrorServer(
     private val approver: suspend (ViewerInfo) -> Boolean,
     private val port: Int = Protocol.DEFAULT_PORT,
     private val handshakeTimeoutMs: Int = 10_000,
+    private val viewerReadTimeoutMs: Int = 0,
 ) : ViewerLink, Closeable {
 
     private val serverSocket = ServerSocket()
@@ -119,6 +120,8 @@ class MirrorServer(
             return
         }
         connection.send(Message.Accept)
+        // Viewers ping every second; silence means the link is dead even without a TCP close.
+        connection.setReadTimeout(viewerReadTimeoutMs)
         active.set(connection)
         _viewer.value = info
         while (true) {

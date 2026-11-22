@@ -190,4 +190,38 @@ class MirrorTransportTest {
         connecting.join()
         assertTrue(System.nanoTime() - started < 1_000_000_000L, "cancel took too long")
     }
+
+    @Test
+    fun `a viewer that goes silent is dropped after the read timeout`() = io {
+        val strict = MirrorServer(scope, approver = { true }, port = 0, viewerReadTimeoutMs = 300).also { it.start() }
+        try {
+            val client = MirrorClient.connect("127.0.0.1", strict.boundPort, hello())
+            strict.viewer.first { it != null }
+            val started = System.nanoTime()
+            strict.viewer.first { it == null }
+            assertTrue(System.nanoTime() - started < 3_000_000_000L)
+            client.close()
+        } finally {
+            strict.close()
+        }
+    }
+
+    @Test
+    fun `a viewer that keeps talking is not dropped`() = io {
+        val strict = MirrorServer(scope, approver = { true }, port = 0, viewerReadTimeoutMs = 300).also { it.start() }
+        try {
+            val client = MirrorClient.connect("127.0.0.1", strict.boundPort, hello())
+            strict.viewer.first { it != null }
+            val drain = launch { strict.messages.collect { } }
+            repeat(10) {
+                client.send(Message.Ping(it.toLong()))
+                kotlinx.coroutines.delay(100)
+            }
+            assertEquals("viewer-1", strict.viewer.value?.deviceId)
+            drain.cancel()
+            client.close()
+        } finally {
+            strict.close()
+        }
+    }
 }
