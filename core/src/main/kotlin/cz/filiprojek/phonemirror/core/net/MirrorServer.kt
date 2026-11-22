@@ -3,6 +3,7 @@ package cz.filiprojek.phonemirror.core.net
 import cz.filiprojek.phonemirror.core.protocol.Message
 import cz.filiprojek.phonemirror.core.protocol.Protocol
 import cz.filiprojek.phonemirror.core.protocol.RejectReason
+import cz.filiprojek.phonemirror.core.stream.ViewerLink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -30,7 +31,7 @@ class MirrorServer(
     private val approver: suspend (ViewerInfo) -> Boolean,
     private val port: Int = Protocol.DEFAULT_PORT,
     private val handshakeTimeoutMs: Int = 10_000,
-) : Closeable {
+) : ViewerLink, Closeable {
 
     private val serverSocket = ServerSocket()
     private val slotTaken = AtomicBoolean(false)
@@ -40,10 +41,10 @@ class MirrorServer(
     private val _viewer = MutableStateFlow<ViewerInfo?>(null)
 
     /** The currently streaming viewer, if any. */
-    val viewer: StateFlow<ViewerInfo?> = _viewer.asStateFlow()
+    override val viewer: StateFlow<ViewerInfo?> = _viewer.asStateFlow()
 
     /** Control messages from viewers. Single consumer. */
-    val messages: Flow<Message> = inbox.receiveAsFlow()
+    override val messages: Flow<Message> = inbox.receiveAsFlow()
 
     val boundPort: Int get() = serverSocket.localPort
 
@@ -63,7 +64,7 @@ class MirrorServer(
     }
 
     /** Sends to the active viewer. Returns `false` if there is none or it just went away. */
-    fun send(message: Message): Boolean {
+    override fun send(message: Message): Boolean {
         val connection = active.get() ?: return false
         return try {
             connection.send(message)
