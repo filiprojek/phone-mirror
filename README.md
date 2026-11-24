@@ -6,6 +6,18 @@ Turn one Android phone into a live camera and another into its remote display ov
 - **Display role:** finds cameras via mDNS, manual IP or QR code; pinch-zoom/pan, rotate/mirror, snapshot, stats overlay; can drive the camera's lens, torch and zoom remotely.
 - **Transport:** hardware H.264 over a single TCP connection (port 47800), one viewer at a time, the camera phone approves every viewer.
 
+Download the APK from the [latest release](https://github.com/filiprojek/phone-mirror/releases/latest).
+
+## Screenshots
+
+| Pick a role | Find the camera | Approve the display |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/1-home.png" width="240" alt="Home screen with Use as camera and Use as display"> | <img src="docs/screenshots/2-connect.png" width="240" alt="Display phone listing cameras found on the WiFi, with QR scan and manual IP entry"> | <img src="docs/screenshots/3-approval.png" width="240" alt="Camera phone asking whether to allow the Pixel 6 display"> |
+| **Camera phone** | **Display phone** | **Connect by QR code** |
+| <img src="docs/screenshots/4-camera.png" width="240" alt="Camera phone streaming, with lens chips, torch, zoom slider and quality menu"> | <img src="docs/screenshots/5-viewer.png" width="240" alt="Display phone showing the stream with stats overlay and remote camera controls"> | <img src="docs/screenshots/6-qr.png" width="240" alt="Camera phone showing a QR code for the display to scan"> |
+
+<sub>Rendered from the app's Compose UI with sample data (`scripts/screenshots.sh`); the camera picture is a drawn stand-in for real footage.</sub>
+
 ## Layout
 
 | Module | What |

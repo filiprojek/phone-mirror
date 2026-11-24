@@ -79,6 +79,19 @@ android {
     }
 }
 
+// README screenshots (scripts/screenshots.sh) only render with -Pshowcase; normal test runs skip them.
+val showcase = providers.gradleProperty("showcase").isPresent
+val showcaseDir = rootProject.layout.projectDirectory.dir("docs/screenshots").asFile.absolutePath
+tasks.withType<Test>().configureEach {
+    if (showcase) {
+        filter.includeTestsMatching("*ShowcaseScreenshots*")
+        systemProperty("roborazzi.test.record", "true")
+        systemProperty("showcase.dir", showcaseDir)
+    } else {
+        filter.excludeTestsMatching("*ShowcaseScreenshots*")
+    }
+}
+
 dependencies {
     implementation(project(":core"))
     implementation(libs.kotlinx.coroutines.android)
@@ -98,6 +111,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
@@ -105,6 +119,10 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
 
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.rules)
