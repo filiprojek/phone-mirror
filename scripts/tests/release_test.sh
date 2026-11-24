@@ -192,6 +192,44 @@ test_failing_tests_abort_release() {
     assert_contains "$(cat gradle.properties)" "VERSION_NAME=0.1.0"
 }
 
+# --- release-notes.sh ----------------------------------------------------------
+
+test_notes_group_commits_since_previous_tag() {
+  setup_repo 0.1.0
+  git tag -a v0.1.0 -m v0.1.0
+  commit_file a "feat(app): remote zoom"
+  commit_file b "fix: stop rotation flapping"
+  commit_file c "docs: readme"
+  commit_file d "feat!: new wire protocol"
+  commit_file e "chore(release): v0.2.0"
+  git tag -a v0.2.0 -m v0.2.0
+  local notes
+  notes=$(./scripts/release-notes.sh v0.2.0)
+  assert_contains "$notes" $'### Features\n\n- **app:** remote zoom\n- new wire protocol' &&
+    assert_contains "$notes" $'### Fixes\n\n- stop rotation flapping' &&
+    assert_contains "$notes" $'### Other\n\n- docs: readme' &&
+    assert_not_contains "$notes" "initial" "commits before previous tag excluded" &&
+    assert_not_contains "$notes" "chore(release)" "release commits dropped"
+}
+
+test_notes_for_first_tag_cover_whole_history_and_skip_empty_sections() {
+  setup_repo 0.1.0
+  commit_file a "feat: streaming"
+  git tag -a v0.1.0 -m v0.1.0
+  local notes
+  notes=$(./scripts/release-notes.sh v0.1.0)
+  assert_contains "$notes" $'- initial\n- streaming' &&
+    assert_not_contains "$notes" "### Fixes" "empty section omitted" &&
+    assert_not_contains "$notes" "### Other" "empty section omitted"
+}
+
+test_notes_require_existing_tag() {
+  setup_repo 0.1.0
+  OUT=$(./scripts/release-notes.sh v9.9.9 2>&1)
+  RC=$?
+  assert_eq 1 "$RC" "exit code" && assert_contains "$OUT" "v9.9.9"
+}
+
 # --- runner --------------------------------------------------------------------
 
 filter=${1:-}
