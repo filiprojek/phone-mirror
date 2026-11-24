@@ -34,3 +34,17 @@ Requires JDK 17+ and an Android SDK (`ANDROID_HOME`) with platform 37.
 NSD discovery, approval dialog, 720p30 at ~3 Mbit/s with ~5 ms latency, remote torch / zoom / lens switch,
 stats overlay, snapshot to the gallery, streaming with the camera app in the background, and automatic
 reconnect after the display's WiFi was toggled.
+
+## License
+
+Copyright (C) 2026 Filip Rojek
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+[GNU General Public License](LICENSE) for more details.
+
+SPDX-License-Identifier: `GPL-3.0-or-later`
