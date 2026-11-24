@@ -1,7 +1,28 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// VERSION_NAME lives in gradle.properties and is bumped by scripts/release.sh.
+val appVersionName: String = providers.gradleProperty("VERSION_NAME").get()
+val appVersionCode: Int = run {
+    val match = Regex("""(\d+)\.(\d{1,2})\.(\d{1,2})""").matchEntire(appVersionName)
+        ?: error("VERSION_NAME must be X.Y.Z with minor and patch 0-99, was '$appVersionName'")
+    val (major, minor, patch) = match.destructured
+    major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt()
+}
+
+// Release signing: PM_* environment variables (CI) or a gitignored keystore.properties (local).
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+fun signingValue(key: String): String? =
+    providers.environmentVariable(key).orNull?.takeIf { it.isNotBlank() }
+        ?: keystoreProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+val releaseKeystore: String? = signingValue("PM_KEYSTORE_FILE")
 
 android {
     namespace = "cz.filiprojek.phonemirror"
@@ -15,14 +36,31 @@ android {
         applicationId = "cz.filiprojek.phonemirror"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = signingValue("PM_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("PM_KEY_ALIAS")
+                keyPassword = signingValue("PM_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
