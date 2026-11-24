@@ -61,9 +61,22 @@ fun ConnectScreen(onConnect: (ConnectTarget) -> Unit, onScan: () -> Unit, onBack
     }
     val found by browser.cameras.collectAsState()
     val cameras = found.values.filter { it.deviceId != ownId }.sortedBy { it.name }
-    var manual by rememberSaveable { mutableStateOf("") }
-    val manualTarget = ConnectTarget.parseManual(manual)
     BackHandler(onBack = onBack)
+    ConnectContent(granted, cameras, onConnect, onScan, onBack)
+}
+
+/** Stateless connect UI: discovered [cameras], QR scan and manual address entry. */
+@Composable
+fun ConnectContent(
+    granted: Boolean,
+    cameras: List<ConnectTarget>,
+    onConnect: (ConnectTarget) -> Unit,
+    onScan: () -> Unit,
+    onBack: () -> Unit,
+    initialManual: String = "",
+) {
+    var manual by rememberSaveable { mutableStateOf(initialManual) }
+    val manualTarget = ConnectTarget.parseManual(manual)
 
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

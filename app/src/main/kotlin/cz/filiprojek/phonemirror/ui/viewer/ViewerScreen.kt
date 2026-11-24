@@ -60,9 +60,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import cz.filiprojek.phonemirror.core.protocol.Message
 import cz.filiprojek.phonemirror.core.camera.ZoomMath
 import cz.filiprojek.phonemirror.core.session.ViewerState
 import cz.filiprojek.phonemirror.core.util.ConnectTarget
+import cz.filiprojek.phonemirror.core.util.StreamStats
 import cz.filiprojek.phonemirror.ui.viewerStatusLabel
 import kotlinx.coroutines.launch
 
@@ -80,13 +82,42 @@ fun ViewerScreen(target: ConnectTarget, onExit: () -> Unit) {
     val transform by vm.transform.collectAsState()
     val stats by vm.statsSnapshot.collectAsState()
     val videoSize by vm.videoSize.collectAsState()
-    var controlsVisible by rememberSaveable { mutableStateOf(true) }
-    var showStats by rememberSaveable { mutableStateOf(false) }
     var textureView by remember { mutableStateOf<TextureView?>(null) }
     val scope = rememberCoroutineScope()
     BackHandler(onBack = onExit)
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    val actions = remember(vm) {
+        object : ViewerActions {
+            override fun exit() = onExit()
+            override fun retry() = vm.retry()
+            override fun resetZoom() = vm.resetZoom()
+            override fun rotate() = vm.rotate()
+            override fun toggleMirror() = vm.toggleMirror()
+            override fun selectLens(id: String) = vm.selectLens(id)
+            override fun setTorch(on: Boolean) = vm.setTorch(on)
+            override fun setZoom(ratio: Float) = vm.setZoom(ratio)
+            override fun snapshot() {
+                val bitmap = textureView?.bitmap ?: return
+                scope.launch {
+                    val saved = vm.saveSnapshot(bitmap)
+                    Toast.makeText(
+                        context,
+                        if (saved) "Saved to Pictures/PhoneMirror" else "Could not save the snapshot",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        }
+    }
+
+    ViewerContent(
+        state = state,
+        camera = camera,
+        mirrored = transform.mirrored,
+        stats = stats,
+        videoSize = videoSize,
+        actions = actions,
+    ) { modifier ->
         AndroidView(
             factory = { ctx ->
                 TextureView(ctx).apply {
@@ -108,20 +139,56 @@ fun ViewerScreen(target: ConnectTarget, onExit: () -> Unit) {
                 }
             },
             update = { view -> view.setTransform(Matrix().apply { setValues(transform.matrix()) }) },
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = modifier
                 .onSizeChanged { vm.onViewSize(it.width, it.height) }
                 .pointerInput(Unit) {
                     detectTransformGestures { centroid, pan, zoom, _ ->
                         vm.onGesture(centroid.x, centroid.y, pan.x, pan.y, zoom)
                     }
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = { controlsVisible = !controlsVisible },
-                        onDoubleTap = { vm.resetZoom() },
-                    )
                 },
+        )
+    }
+}
+
+/** What the viewer controls can do; defaults do nothing (handy for previews and screenshots). */
+interface ViewerActions {
+    fun exit() {}
+    fun retry() {}
+    fun resetZoom() {}
+    fun rotate() {}
+    fun toggleMirror() {}
+    fun snapshot() {}
+    fun selectLens(id: String) {}
+    fun setTorch(on: Boolean) {}
+    fun setZoom(ratio: Float) {}
+}
+
+/**
+ * Stateless display-side UI. [video] draws the stream and receives a full-size modifier that already
+ * handles tap (toggle controls) and double-tap (reset zoom).
+ */
+@Composable
+fun ViewerContent(
+    state: ViewerState,
+    camera: Message.State?,
+    mirrored: Boolean,
+    stats: StreamStats.Snapshot,
+    videoSize: Pair<Int, Int>?,
+    actions: ViewerActions,
+    initiallyShowStats: Boolean = false,
+    video: @Composable (Modifier) -> Unit,
+) {
+    var controlsVisible by rememberSaveable { mutableStateOf(true) }
+    var showStats by rememberSaveable { mutableStateOf(initiallyShowStats) }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        video(
+            Modifier.fillMaxSize().pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { controlsVisible = !controlsVisible },
+                    onDoubleTap = { actions.resetZoom() },
+                )
+            },
         )
 
         viewerStatusLabel(state)?.let { label ->
@@ -133,8 +200,8 @@ fun ViewerScreen(target: ConnectTarget, onExit: () -> Unit) {
                 Text(label, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 if (state is ViewerState.Failed || state == ViewerState.Closed) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = onExit) { Text("Back", color = Color.White) }
-                        Button(onClick = vm::retry) { Text("Try again") }
+                        OutlinedButton(onClick = actions::exit) { Text("Back", color = Color.White) }
+                        Button(onClick = actions::retry) { Text("Try again") }
                     }
                 } else {
                     CircularProgressIndicator()
@@ -157,7 +224,7 @@ fun ViewerScreen(target: ConnectTarget, onExit: () -> Unit) {
         }
 
         AnimatedVisibility(controlsVisible, Modifier.align(Alignment.TopStart), enter = fadeIn(), exit = fadeOut()) {
-            IconButton(onClick = onExit, modifier = Modifier.safeDrawingPadding().padding(4.dp).background(overlay, RoundedCornerShape(50))) {
+            IconButton(onClick = actions::exit, modifier = Modifier.safeDrawingPadding().padding(4.dp).background(overlay, RoundedCornerShape(50))) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
         }
@@ -176,7 +243,7 @@ fun ViewerScreen(target: ConnectTarget, onExit: () -> Unit) {
                         cam.lenses.forEach { lens ->
                             FilterChip(
                                 selected = lens.id == cam.currentLensId,
-                                onClick = { vm.selectLens(lens.id) },
+                                onClick = { actions.selectLens(lens.id) },
                                 label = { Text(lens.label) },
                             )
                         }
@@ -184,37 +251,26 @@ fun ViewerScreen(target: ConnectTarget, onExit: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         FilledIconToggleButton(
                             checked = cam.torchOn,
-                            onCheckedChange = vm::setTorch,
+                            onCheckedChange = actions::setTorch,
                             enabled = cam.torchAvailable,
                         ) { Icon(if (cam.torchOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff, "Flashlight") }
                         Text("Camera %.1f×".format(cam.zoom), color = Color.White)
                         Slider(
                             value = ZoomMath.ratioToSlider(cam.zoom, cam.zoomMin, cam.zoomMax),
-                            onValueChange = { vm.setZoom(ZoomMath.sliderToRatio(it, cam.zoomMin, cam.zoomMax)) },
+                            onValueChange = { actions.setZoom(ZoomMath.sliderToRatio(it, cam.zoomMin, cam.zoomMax)) },
                             enabled = cam.zoomMax > cam.zoomMin,
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         )
                     }
                 }
                 Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                    IconButton(onClick = vm::rotate) { Icon(Icons.Filled.RotateRight, "Rotate view", tint = Color.White) }
-                    IconToggleButton(checked = transform.mirrored, onCheckedChange = { vm.toggleMirror() }) {
-                        Icon(Icons.Filled.Flip, "Mirror view", tint = if (transform.mirrored) MaterialTheme.colorScheme.primary else Color.White)
+                    IconButton(onClick = actions::rotate) { Icon(Icons.Filled.RotateRight, "Rotate view", tint = Color.White) }
+                    IconToggleButton(checked = mirrored, onCheckedChange = { actions.toggleMirror() }) {
+                        Icon(Icons.Filled.Flip, "Mirror view", tint = if (mirrored) MaterialTheme.colorScheme.primary else Color.White)
                     }
-                    IconButton(
-                        onClick = {
-                            val bitmap = textureView?.bitmap ?: return@IconButton
-                            scope.launch {
-                                val saved = vm.saveSnapshot(bitmap)
-                                Toast.makeText(
-                                    context,
-                                    if (saved) "Saved to Pictures/PhoneMirror" else "Could not save the snapshot",
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                        },
-                        enabled = state == ViewerState.Streaming,
-                    ) { Icon(Icons.Filled.CameraAlt, "Save snapshot", tint = Color.White) }
+                    IconButton(onClick = actions::snapshot, enabled = state == ViewerState.Streaming) {
+                        Icon(Icons.Filled.CameraAlt, "Save snapshot", tint = Color.White)
+                    }
                     IconToggleButton(checked = showStats, onCheckedChange = { showStats = it }) {
                         Icon(Icons.Filled.QueryStats, "Show stats", tint = if (showStats) MaterialTheme.colorScheme.primary else Color.White)
                     }

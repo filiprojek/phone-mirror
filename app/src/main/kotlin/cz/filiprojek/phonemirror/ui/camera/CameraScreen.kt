@@ -50,9 +50,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import cz.filiprojek.phonemirror.core.camera.CameraState
 import cz.filiprojek.phonemirror.core.camera.QualityPreset
 import cz.filiprojek.phonemirror.core.camera.Size
 import cz.filiprojek.phonemirror.core.camera.ZoomMath
+import cz.filiprojek.phonemirror.core.net.ViewerInfo
+import cz.filiprojek.phonemirror.core.util.ConnectTarget
+import cz.filiprojek.phonemirror.service.CameraCommands
 import cz.filiprojek.phonemirror.service.CameraHub
 import cz.filiprojek.phonemirror.service.PreviewTarget
 import cz.filiprojek.phonemirror.service.StreamingService
@@ -78,7 +82,6 @@ fun CameraScreen(onExit: () -> Unit) {
     val quality by CameraHub.quality.collectAsState()
     val streamSize by CameraHub.streamSize.collectAsState()
     val error by CameraHub.error.collectAsState()
-    var showQr by rememberSaveable { mutableStateOf(false) }
 
     fun stop() {
         StreamingService.stop(context)
@@ -86,8 +89,50 @@ fun CameraScreen(onExit: () -> Unit) {
     }
     BackHandler(onBack = ::stop)
 
+    CameraContent(
+        status = when {
+            error != null -> "Camera error: $error"
+            !granted -> "Camera and local network permissions are needed."
+            !running -> "Starting camera…"
+            viewer != null -> "Streaming to ${viewer!!.deviceName}"
+            else -> "Waiting for a display"
+        },
+        address = address,
+        camera = state,
+        quality = quality,
+        pending = pending,
+        commands = HubCommands,
+        onStop = ::stop,
+        preview = { modifier -> streamSize?.let { size -> Preview(size, modifier) } },
+    )
+}
+
+/** Forwards to the running service's commands, which appear and disappear with the service. */
+private object HubCommands : CameraCommands {
+    override fun selectLens(id: String) { CameraHub.commands?.selectLens(id) }
+    override fun setTorch(on: Boolean) { CameraHub.commands?.setTorch(on) }
+    override fun setZoom(ratio: Float) { CameraHub.commands?.setZoom(ratio) }
+    override fun setQuality(preset: QualityPreset) { CameraHub.commands?.setQuality(preset) }
+    override fun decide(allow: Boolean) { CameraHub.commands?.decide(allow) }
+}
+
+/** Stateless camera-side UI; [preview] draws the live camera preview, centred. */
+@Composable
+fun CameraContent(
+    status: String,
+    address: ConnectTarget?,
+    camera: CameraState?,
+    quality: QualityPreset,
+    pending: ViewerInfo?,
+    commands: CameraCommands,
+    onStop: () -> Unit,
+    initiallyShowQr: Boolean = false,
+    preview: @Composable (Modifier) -> Unit,
+) {
+    var showQr by rememberSaveable { mutableStateOf(initiallyShowQr) }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        streamSize?.let { size -> Preview(size, Modifier.align(Alignment.Center)) }
+        preview(Modifier.align(Alignment.Center))
 
         Column(
             Modifier.safeDrawingPadding().padding(12.dp).fillMaxWidth()
@@ -95,27 +140,17 @@ fun CameraScreen(onExit: () -> Unit) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        when {
-                            error != null -> "Camera error: $error"
-                            !granted -> "Camera and local network permissions are needed."
-                            !running -> "Starting camera…"
-                            viewer != null -> "Streaming to ${viewer!!.deviceName}"
-                            else -> "Waiting for a display"
-                        },
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
+                    Text(status, color = Color.White, style = MaterialTheme.typography.titleMedium)
                     address?.let { Text("${it.host}:${it.port}", color = Color.White.copy(alpha = 0.8f)) }
                 }
                 IconButton(onClick = { showQr = true }, enabled = address != null) {
                     Icon(Icons.Filled.QrCode2, "Show QR code", tint = Color.White)
                 }
-                IconButton(onClick = ::stop) { Icon(Icons.Filled.Close, "Stop camera", tint = Color.White) }
+                IconButton(onClick = onStop) { Icon(Icons.Filled.Close, "Stop camera", tint = Color.White) }
             }
         }
 
-        state?.let { camera ->
+        camera?.let { camera ->
             Column(
                 Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(12.dp).fillMaxWidth()
                     .background(overlay, RoundedCornerShape(12.dp)).padding(12.dp),
@@ -129,7 +164,7 @@ fun CameraScreen(onExit: () -> Unit) {
                     camera.lenses.forEach { lens ->
                         FilterChip(
                             selected = lens.id == camera.currentLensId,
-                            onClick = { CameraHub.commands?.selectLens(lens.id) },
+                            onClick = { commands.selectLens(lens.id) },
                             label = { Text(lens.label) },
                         )
                     }
@@ -137,7 +172,7 @@ fun CameraScreen(onExit: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledIconToggleButton(
                         checked = camera.torchOn,
-                        onCheckedChange = { CameraHub.commands?.setTorch(it) },
+                        onCheckedChange = commands::setTorch,
                         enabled = camera.torchAvailable,
                     ) {
                         Icon(if (camera.torchOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff, "Flashlight")
@@ -146,12 +181,12 @@ fun CameraScreen(onExit: () -> Unit) {
                     Slider(
                         value = ZoomMath.ratioToSlider(camera.zoom, camera.zoomMin, camera.zoomMax),
                         onValueChange = {
-                            CameraHub.commands?.setZoom(ZoomMath.sliderToRatio(it, camera.zoomMin, camera.zoomMax))
+                            commands.setZoom(ZoomMath.sliderToRatio(it, camera.zoomMin, camera.zoomMax))
                         },
                         enabled = camera.zoomMax > camera.zoomMin,
                         modifier = Modifier.weight(1f),
                     )
-                    QualityMenu(quality)
+                    QualityMenu(quality, commands::setQuality)
                 }
             }
         }
@@ -162,8 +197,8 @@ fun CameraScreen(onExit: () -> Unit) {
             onDismissRequest = {},
             title = { Text("Allow display?") },
             text = { Text("${viewerInfo.deviceName} (${viewerInfo.address}) wants to see your camera.") },
-            confirmButton = { Button(onClick = { CameraHub.commands?.decide(true) }) { Text("Allow") } },
-            dismissButton = { TextButton(onClick = { CameraHub.commands?.decide(false) }) { Text("Deny") } },
+            confirmButton = { Button(onClick = { commands.decide(true) }) { Text("Allow") } },
+            dismissButton = { TextButton(onClick = { commands.decide(false) }) { Text("Deny") } },
         )
     }
 
@@ -186,7 +221,7 @@ fun CameraScreen(onExit: () -> Unit) {
 }
 
 @Composable
-private fun QualityMenu(current: QualityPreset) {
+private fun QualityMenu(current: QualityPreset, onSelect: (QualityPreset) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { open = true }) {
@@ -199,7 +234,7 @@ private fun QualityMenu(current: QualityPreset) {
                     text = { Text("${preset.height}p · ${preset.bitrate / 1_000_000.0} Mbps") },
                     onClick = {
                         open = false
-                        CameraHub.commands?.setQuality(preset)
+                        onSelect(preset)
                     },
                 )
             }
