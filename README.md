@@ -23,6 +23,27 @@ Requires JDK 17+ and an Android SDK (`ANDROID_HOME`) with platform 37.
 ./gradlew connectedDebugAndroidTest            # on-device tests (needs adb)
 ```
 
+## Releasing
+
+```sh
+scripts/release.sh patch          # or minor, major, or an explicit X.Y.Z
+scripts/release.sh minor --dry-run
+```
+
+From a clean `master` that matches `origin/master`, the script runs the unit tests, bumps
+`VERSION_NAME` in `gradle.properties` (versionCode = major·10000 + minor·100 + patch), commits
+`chore(release): vX.Y.Z`, tags `vX.Y.Z` and pushes. The tag starts the
+[Release workflow](.github/workflows/release.yml), which builds the R8-shrunk APK, signs it and
+publishes a GitHub Release with the APK, its SHA-256 and notes grouped from the Conventional
+Commits since the previous tag (`scripts/release-notes.sh`). `scripts/tests/release_test.sh`
+tests both scripts.
+
+**Signing.** Release builds read `PM_KEYSTORE_FILE`, `PM_KEYSTORE_PASSWORD`, `PM_KEY_ALIAS` and
+`PM_KEY_PASSWORD` from the environment, or from a gitignored `keystore.properties` with the same
+keys for local builds. CI gets them from the repository secrets `PM_KEYSTORE_BASE64` (the keystore,
+base64-encoded), `PM_KEYSTORE_PASSWORD`, `PM_KEY_ALIAS` and `PM_KEY_PASSWORD`. Keep a backup of the
+keystore: without it, later versions cannot be installed over existing ones.
+
 ## Notes
 
 - **Android 17 (API 37):** both roles need the runtime `ACCESS_LOCAL_NETWORK` permission for LAN sockets and NSD; the app requests it.
